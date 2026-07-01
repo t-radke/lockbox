@@ -42,6 +42,21 @@ return status;
 })
 .WithName("GetHealth");
 
+app.MapPost("/upload", async (IFormFile file) =>
+{
+    string guid = Guid.NewGuid().ToString();
+    string ending = Path.GetExtension(file.FileName);
+
+    string result = $"{guid}{ending}";
+
+    using var stream = new FileStream("uploads/" + result, FileMode.Create);
+    await file.CopyToAsync(stream);
+
+    return Results.Ok(new { message = "File received", fileName = file.FileName });
+})
+.WithName("UploadFile")
+.DisableAntiforgery();
+
 
 app.Run();
 
