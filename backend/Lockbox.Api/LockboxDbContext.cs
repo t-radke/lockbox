@@ -7,5 +7,6 @@ public class LockboxDbContext : DbContext
     }
 
     public DbSet<FileRecord> FileRecords { get; set; }
+    public DbSet<User> Users { get; set; }
 
 }

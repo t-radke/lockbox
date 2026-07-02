@@ -5,6 +5,7 @@ public class FileRecord
     public required string OriginalFileName { get; set; }
     public required string GUIDFileName { get; set; }
     public DateTime UploadTime { get; set; }
+    public int UserId { get; set; }
 
 
 }

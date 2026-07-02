@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Identity;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -11,7 +12,11 @@ builder.Services.AddOpenApi();
 builder.Services.AddDbContext<LockboxDbContext>(options =>
     options.UseSqlite("Data Source=lockbox.db"));
 
+//Password hasher to hand over and create an instance
+builder.Services.AddScoped<PasswordHasher<User>, PasswordHasher<User>>();
+
 var app = builder.Build();
+
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -71,5 +76,21 @@ app.MapGet("/download/{id}", async (int id, LockboxDbContext db) =>
 });
 
 
+app.MapPost("/register", async (RegisterRequest request, LockboxDbContext db, PasswordHasher<User> hasher) =>
+{
+    var hashedPassword = hasher.HashPassword(null!, request.Password);
+    var newUser = new User { Email = request.Email, PasswordHash = hashedPassword};
+    db.Users.Add(newUser);
+    await db.SaveChangesAsync();
+
+    return Results.Ok(new { message = "User created successfuly!"});
+
+});
+
+
 app.Run();
+
+
+public record RegisterRequest(string Email, string Password);
+
 
