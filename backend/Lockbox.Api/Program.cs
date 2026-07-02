@@ -1,5 +1,3 @@
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Routing.Constraints;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -8,6 +6,8 @@ var builder = WebApplication.CreateBuilder(args);
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
+
+//SQLite DB
 builder.Services.AddDbContext<LockboxDbContext>(options =>
     options.UseSqlite("Data Source=lockbox.db"));
 
@@ -21,25 +21,8 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
 
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast");
-
+//Initial health check make sure we can communicate with backend
 app.MapGet("/health" , () =>{
     
 string status = "Ok";
@@ -51,14 +34,17 @@ return status;
 
 app.MapPost("/upload", async (IFormFile file, LockboxDbContext db) =>
 {
+    //generating GUID and attaching it to file name extension, concatinating them afterwards
     string guid = Guid.NewGuid().ToString();
     string ending = Path.GetExtension(file.FileName);
 
     string result = $"{guid}{ending}";
 
+    //creating new file stream and placing file in uploads folder
     using var stream = new FileStream("uploads/" + result, FileMode.Create);
     await file.CopyToAsync(stream);
 
+    //creating new record AFTER file is uploaded and then putting it in the DB
     var newRecord = new FileRecord {OriginalFileName = file.FileName, GUIDFileName = result, UploadTime = DateTime.Now};
 
     db.FileRecords.Add(newRecord);
@@ -69,10 +55,21 @@ app.MapPost("/upload", async (IFormFile file, LockboxDbContext db) =>
 .WithName("UploadFile")
 .DisableAntiforgery();
 
+app.MapGet("/download/{id}", async (int id, LockboxDbContext db) =>
+{
+    //assigning record id to var record
+    var record = await db.FileRecords.FindAsync(id);
+
+    // guard clause
+    if (record == null)
+    {
+        return Results.NotFound();
+    } 
+    
+    var filePath = Path.Combine(Directory.GetCurrentDirectory(), "uploads", record.GUIDFileName);
+    return Results.File(filePath, "application/octet-stream", record.OriginalFileName);
+});
+
 
 app.Run();
 
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
