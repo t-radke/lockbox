@@ -6,8 +6,6 @@ public class LockboxDbContext : DbContext
     {
     }
 
-    public DbSet<FileRecord> Ids { get; set; }
-    public DbSet<FileRecord> OriginalFileNames { get; set; }
-    public DbSet<FileRecord> GUIDFileNames { get; set; }
-    public DbSet<FileRecord> UploadTimes { get; set; }
+    public DbSet<FileRecord> FileRecords { get; set; }
+
 }

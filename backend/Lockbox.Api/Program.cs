@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Routing.Constraints;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -47,7 +49,7 @@ return status;
 })
 .WithName("GetHealth");
 
-app.MapPost("/upload", async (IFormFile file) =>
+app.MapPost("/upload", async (IFormFile file, LockboxDbContext db) =>
 {
     string guid = Guid.NewGuid().ToString();
     string ending = Path.GetExtension(file.FileName);
@@ -56,6 +58,11 @@ app.MapPost("/upload", async (IFormFile file) =>
 
     using var stream = new FileStream("uploads/" + result, FileMode.Create);
     await file.CopyToAsync(stream);
+
+    var newRecord = new FileRecord {OriginalFileName = file.FileName, GUIDFileName = result, UploadTime = DateTime.Now};
+
+    db.FileRecords.Add(newRecord);
+    await db.SaveChangesAsync();
 
     return Results.Ok(new { message = "File received", fileName = file.FileName });
 })
