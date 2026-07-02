@@ -1,5 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
+using System.IdentityModel.Tokens.Jwt;
+using Microsoft.IdentityModel.Tokens;
+using System.Security.Claims;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -14,6 +18,7 @@ builder.Services.AddDbContext<LockboxDbContext>(options =>
 
 //Password hasher to hand over and create an instance
 builder.Services.AddScoped<PasswordHasher<User>, PasswordHasher<User>>();
+
 
 var app = builder.Build();
 
@@ -87,10 +92,49 @@ app.MapPost("/register", async (RegisterRequest request, LockboxDbContext db, Pa
 
 });
 
+app.MapPost("/login", async (LoginRequest request, LockboxDbContext db, PasswordHasher<User> hasher) =>
+{
+
+    var user = await db.Users.FirstOrDefaultAsync(u => u.Email == request.Email);
+
+        if (user == null)
+        {
+            return Results.Json(new { message = "Username or password is not correct or cannot be found" }, statusCode: 401);
+        }
+
+    var verifyPassword = hasher.VerifyHashedPassword(user, user.PasswordHash, request.Password);
+
+        if (verifyPassword == PasswordVerificationResult.Failed)
+        {
+            return Results.Json(new { message = "Username or password is not correct or cannot be found" }, statusCode: 401);
+        }
+
+    var tokenHandler = new JwtSecurityTokenHandler();
+    var key = Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!);
+
+    var tokenDescriptor = new SecurityTokenDescriptor
+    {
+        Subject = new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString())
+        }),
+        Expires = DateTime.UtcNow.AddHours(24),
+        Issuer = builder.Configuration["Jwt:Issuer"],
+        SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
+    };
+
+    var token = tokenHandler.CreateToken(tokenDescriptor);
+    var jwt = tokenHandler.WriteToken(token);
+    
+
+    return Results.Ok(new { token = jwt });
+}
+);
+
 
 app.Run();
 
 
 public record RegisterRequest(string Email, string Password);
-
+public record LoginRequest(string Email, string Password);
 
