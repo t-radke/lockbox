@@ -64,7 +64,7 @@ return status;
 })
 .WithName("GetHealth");
 
-app.MapPost("/upload", async (IFormFile file, LockboxDbContext db) =>
+app.MapPost("/upload", async (IFormFile file, LockboxDbContext db, HttpContext httpContext) =>
 {
     //generating GUID and attaching it to file name extension, concatinating them afterwards
     string guid = Guid.NewGuid().ToString();
@@ -72,12 +72,17 @@ app.MapPost("/upload", async (IFormFile file, LockboxDbContext db) =>
 
     string result = $"{guid}{ending}";
 
+    //pulling out user id
+    var userIdClaim = httpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+    var userIdClaimNumber = int.Parse(userIdClaim!);
+
     //creating new file stream and placing file in uploads folder
     using var stream = new FileStream("uploads/" + result, FileMode.Create);
     await file.CopyToAsync(stream);
 
     //creating new record AFTER file is uploaded and then putting it in the DB
-    var newRecord = new FileRecord {OriginalFileName = file.FileName, GUIDFileName = result, UploadTime = DateTime.Now};
+    var newRecord = new FileRecord {OriginalFileName = file.FileName, GUIDFileName = result, UploadTime = DateTime.Now, UserId = userIdClaimNumber};
 
     db.FileRecords.Add(newRecord);
     await db.SaveChangesAsync();
@@ -88,7 +93,7 @@ app.MapPost("/upload", async (IFormFile file, LockboxDbContext db) =>
 .RequireAuthorization()
 .DisableAntiforgery();
 
-app.MapGet("/download/{id}", async (int id, LockboxDbContext db) =>
+app.MapGet("/download/{id}", async (int id, LockboxDbContext db, HttpContext httpContext) =>
 {
     //assigning record id to var record
     var record = await db.FileRecords.FindAsync(id);
@@ -98,6 +103,17 @@ app.MapGet("/download/{id}", async (int id, LockboxDbContext db) =>
     {
         return Results.NotFound();
     } 
+
+    //pulling out user id
+    var userIdClaim = httpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+    var userIdClaimNumber = int.Parse(userIdClaim!);
+
+    //if user id and claim number do not match
+    if (record.UserId != userIdClaimNumber)
+    {
+        return Results.Json(new { message = "You do not have permission to access this file" }, statusCode: 403);
+    }
     
     var filePath = Path.Combine(Directory.GetCurrentDirectory(), "uploads", record.GUIDFileName);
     return Results.File(filePath, "application/octet-stream", record.OriginalFileName);
