@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
 using System.IdentityModel.Tokens.Jwt;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Security.Claims;
 using System.Text;
@@ -19,8 +20,29 @@ builder.Services.AddDbContext<LockboxDbContext>(options =>
 //Password hasher to hand over and create an instance
 builder.Services.AddScoped<PasswordHasher<User>, PasswordHasher<User>>();
 
+//authentication system with the app 
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = builder.Configuration["Jwt:Issuer"],
+            ValidateAudience = false,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!))
+        };
+    });
+
+builder.Services.AddAuthorization();
+
 
 var app = builder.Build();
+
+//activate checking on every request
+app.UseAuthentication();
+app.UseAuthorization();
 
 
 // Configure the HTTP request pipeline.
@@ -63,6 +85,7 @@ app.MapPost("/upload", async (IFormFile file, LockboxDbContext db) =>
     return Results.Ok(new { message = "File received", fileName = file.FileName });
 })
 .WithName("UploadFile")
+.RequireAuthorization()
 .DisableAntiforgery();
 
 app.MapGet("/download/{id}", async (int id, LockboxDbContext db) =>
@@ -78,7 +101,10 @@ app.MapGet("/download/{id}", async (int id, LockboxDbContext db) =>
     
     var filePath = Path.Combine(Directory.GetCurrentDirectory(), "uploads", record.GUIDFileName);
     return Results.File(filePath, "application/octet-stream", record.OriginalFileName);
-});
+})
+.WithName("DownloadFile")
+.RequireAuthorization()
+.DisableAntiforgery();
 
 
 app.MapPost("/register", async (RegisterRequest request, LockboxDbContext db, PasswordHasher<User> hasher) =>
@@ -129,7 +155,9 @@ app.MapPost("/login", async (LoginRequest request, LockboxDbContext db, Password
 
     return Results.Ok(new { token = jwt });
 }
-);
+)
+.WithName("Login")
+.DisableAntiforgery();
 
 
 app.Run();
