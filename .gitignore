@@ -427,3 +427,17 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# Database
+
+*.db
+*.db-shm
+*.db-wal
+
+# Uploaded Files
+
+uploads/*
+!uploads/.gitkeep
+
+# Local secrets
+appsettings.Development.json
